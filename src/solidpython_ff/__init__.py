@@ -74,6 +74,17 @@ solid.OpenSCADObject.hole = solid.OpenSCADObject.h
 solid.OpenSCADObject.t = lambda self, x=0, y=0, z=0: ff_translate(x, y, z)(self)
 solid.OpenSCADObject.translate = solid.OpenSCADObject.t
 solid.OpenSCADObject.r = lambda self, a=None, b=None, c=None: ff_rotate(a, b, c)(self)
+
+solid.OpenSCADObject.rzx = lambda self : solid.utils.rot_z_to_x(self)
+solid.OpenSCADObject.rzy = lambda self : solid.utils.rot_z_to_y(self)
+
+solid.OpenSCADObject.rxy = lambda self : solid.utils.rot_x_to_y(self)
+solid.OpenSCADObject.rxz = lambda self : solid.utils.rot_z_to_x(self)
+
+solid.OpenSCADObject.ryx = lambda self : solid.utils.rot_x_to_y(self)
+solid.OpenSCADObject.ryz = lambda self : solid.utils.rot_z_to_y(self)
+
+
 solid.OpenSCADObject.rotate = solid.OpenSCADObject.r
 solid.OpenSCADObject.s = lambda self, x=1, y=1, z=1: ff_scale(
     x,
@@ -175,7 +186,6 @@ def q(x, y=None, z=None, center=True):
             y = x
         if z is None:
             z = x
-        print(x, y, z)
         return solid.cube([x, y, z], center=center)
 
 
@@ -244,6 +254,7 @@ def triangle90(a, b, height=1, axis="z", center=True):
         p = p.rotate(
             0,
             90,
+            0,
         )
     elif axis == "z":
         pass
