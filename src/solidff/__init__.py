@@ -6,23 +6,15 @@ import math
 
 __version__ = "0.1.0"
 
-def ff_translate(x, y, z):
-    return solid.translate([x, y, z])
+def ff_translate(self, x, y, z):
+    return solid.translate([x, y, z])(self)
 
-def ff_rotate(a, b, c):
-    if a is None and b is None and c is None:
-        return solid.rotate(0, 0, 0)
-    if (
-        isinstance(a, (float, int))
-        and isinstance(b, (float, int))
-        and isinstance(c, (float, int))
-    ):
-        return solid.rotate([a, b, c])
-    else:
-        return solid.rotate(a=a, v=b)
-
-def ff_scale(x, y, z):
-    return solid.scale([x, y, z])
+def ff_rotate(self, x, y=None, z=None, v=None):
+    if y == None and z == None:
+        return solid.rotate(x)(self)
+    if v is None:
+        return solid.rotate((x, y, z))(self)
+    return solid.rotate(a=[x, y, z], v=v)(self)
 
 def dump(root, fn, prefix=""):
     if fn.endswith(".py"):
@@ -37,52 +29,60 @@ def _check_axis(axis):
     if not axis in ("x", "y", "z"):
         raise ValueError("invalid axis")
 
-def ff_linear_extrude(obj, height, axis="z", center=True, **kwargs):
+def ff_linear_extrude(obj, height, axis="z", center=False, **kwargs):
     """Note that center only centers the 'axis', not your 2d object"""
     _check_axis(axis)
     o = solid.linear_extrude(height, **kwargs)(obj)
     if center:
         o = o.down(height / 2)
     if axis == "y":
-        o = o.rotate(90, 0, 0)
+        return o.rotate(90, 0, 0)
     elif axis == "x":
-        o = o.rotate(0, 90, 0)
+        return o.rotate(0, 90, 0)
     return o
 
-solid.OpenSCADObject.debug = solid.OpenSCADObject.d = lambda self: solid.debug(self)
-solid.OpenSCADObject.background = solid.OpenSCADObject.b = lambda self: solid.background(self)
-solid.OpenSCADObject.hole = solid.OpenSCADObject.h = lambda self: solid.hole()(self)
-solid.OpenSCADObject.translate = solid.OpenSCADObject.t = lambda self, x=0, y=0, z=0: ff_translate(x, y, z)(self)
-solid.OpenSCADObject.rotate = solid.OpenSCADObject.r = lambda self, a=None, b=None, c=None: ff_rotate(a, b, c)(self)
+solid.OpenSCADObject.d = solid.OpenSCADObject.debug = lambda self: solid.debug(self)
+solid.OpenSCADObject.b = solid.OpenSCADObject.background = lambda self: solid.background(self)
+solid.OpenSCADObject.h = solid.OpenSCADObject.hole = lambda self: solid.hole()(self)
+solid.OpenSCADObject.t = solid.OpenSCADObject.translate = ff_translate
+solid.OpenSCADObject.r = solid.OpenSCADObject.rotate = ff_rotate
+solid.OpenSCADObject.s = solid.OpenSCADObject.scale = lambda x=1, y=1, z=1: solid.scale([x, y, z])
 
-solid.OpenSCADObject.rzx = lambda self : solid.utils.rot_z_to_x(self)
-solid.OpenSCADObject.rzy = lambda self : solid.utils.rot_z_to_y(self)
+solid.OpenSCADObject.rzx = lambda self: solid.utils.rot_z_to_x(self)
+solid.OpenSCADObject.rzy = lambda self: solid.utils.rot_z_to_y(self)
+solid.OpenSCADObject.rxy = lambda self: solid.utils.rot_x_to_y(self)
+solid.OpenSCADObject.rxz = lambda self: solid.utils.rot_z_to_x(self)
+solid.OpenSCADObject.ryx = lambda self: solid.utils.rot_x_to_y(self)
+solid.OpenSCADObject.ryz = lambda self: solid.utils.rot_z_to_y(self)
 
-solid.OpenSCADObject.rxy = lambda self : solid.utils.rot_x_to_y(self)
-solid.OpenSCADObject.rxz = lambda self : solid.utils.rot_z_to_x(self)
-
-solid.OpenSCADObject.ryx = lambda self : solid.utils.rot_x_to_y(self)
-solid.OpenSCADObject.ryz = lambda self : solid.utils.rot_z_to_y(self)
-
-solid.OpenSCADObject.z = solid.OpenSCADObject.up = lambda self, d: solid.utils.up(d)(self)  # along z
-solid.OpenSCADObject.down = lambda self, d: solid.utils.down(d)(self)
 solid.OpenSCADObject.x = solid.OpenSCADObject.right = lambda self, d: solid.utils.right(d)(self)
 solid.OpenSCADObject.left = lambda self, d: solid.utils.left(d)(self)  # along y
 solid.OpenSCADObject.y = solid.OpenSCADObject.forward = lambda self, d: solid.utils.forward(d)(self)  # along x
 solid.OpenSCADObject.back = lambda self, d: solid.utils.back(d)(self)
-solid.OpenSCADObject.color = solid.OpenSCADObject.c = lambda self, c: solid.color(c)(self)
-solid.OpenSCADObject.mirror = solid.OpenSCADObject.m = lambda self, a, b, c: solid.mirror([a, b, c])(self)
+solid.OpenSCADObject.z = solid.OpenSCADObject.up = lambda self, d: solid.utils.up(d)(self)  # along z
+solid.OpenSCADObject.down = lambda self, d: solid.utils.down(d)(self)
+solid.OpenSCADObject.c = solid.OpenSCADObject.color = lambda self, c: solid.color(c)(self)
+solid.OpenSCADObject.m = solid.OpenSCADObject.mirror = lambda self, a, b, c: solid.mirror([a, b, c])(self)
 
 solid.OpenSCADObject.e = solid.OpenSCADObject.extrude = solid.OpenSCADObject.linear_extrude = ff_linear_extrude
 
 solid.OpenSCADObject.dump = dump
 
-c = solid.circle
-s = solid.square
+def c(r=None, d=None, segments=60):
+    if r == None and d == None:
+        raise ValueError("One of `r` and `d` must be specified")
+    if r != None:
+        return solid.circle(r=r, segments=segments)
+    return solid.circle(d=d, segments=segments)
 
-def cy(r=None, h=None, center=True, r1=None, r2=None, segments=64, axis="z"):
+def s(x, y=None):
+    if y == None:
+        return solid.square(x)
+    return solid.square([x, y])
+
+def cy(r=None, h=None, center=False, r1=None, r2=None, axis="z", segments=60):
     _check_axis(axis)
-    cylinder = solid.cylinder(r, h, center=center, segments=segments, r1=r1, r2=r2)
+    cylinder = solid.cylinder(r, h, center=center, r1=r1, r2=r2, segments=segments)
     if axis == "z":
         return cylinder
     elif axis == "y":
@@ -90,53 +90,48 @@ def cy(r=None, h=None, center=True, r1=None, r2=None, segments=64, axis="z"):
     elif axis == "x":
         return cylinder.rotate(0, 90, 0)
 
-def sector(radius=20, angles=(45, 135), segments=24):
-    r = radius / math.cos(math.pi / segments)
-    step = int(-360 / segments)
-
-    points = [[0, 0]]
-    for a in range(int(angles[0]), int(angles[1] - 360), step):
-        points.append(
-            [r * math.cos(math.radians(a)), r * math.sin(math.radians(a))]
-        )
-    for a in range(int(angles[0]), int(angles[1] - 360), step):
-        points.append([r * math.cos(math.radians(angles[1])),
-                       r * math.sin(math.radians(angles[1]))])
-
+def sector(radius=20, angles=(45, 135)):
+    rect = solid.square([radius * 2, radius]).left(radius)
     return solid.difference()(
-        solid.circle(radius, segments=segments),
-        solid.polygon(points),
+        solid.circle(20),
+        rect.rotate(angles[0]),
+        rect.rotate(angles[1]).mirror(math.cos(math.radians(angles[1])), math.sin(math.radians(angles[1])), 0),
     )
 
-
-def arc(radius=20, angles=(45, 290), width=1, segments=24):
+def arc(radius=20, angles=(45, 290), width=1):
     return solid.difference()(
-        sector(radius + width, angles, segments),
-        sector(radius, angles, segments),
+        sector(radius + width, angles),
+        sector(radius, angles),
     )
 
-def ring(r1, r2=None, width=None, h=2, *cy_args, **cy_kwargs):
-    if width is None and r2 is None:
-        width = 1
-    if width and r2:
-        raise ValueError("Specify either width or r2")
-    if width:
-        r2 = r1 - width
+# def ring(o=None, i=None, w=None, h=2, *cy_args, **cy_kwargs):
+#     if int(o != None) + int(i != None) + int(w != None) != 2:
+#         raise ValueError("Specify at least 2 of `o`, `i`, and `w`")
+#     if o == None:
+#         o = i + w
+#     elif i == None:
+#         i = o - w
+#     return cy(o, h, *cy_args, **cy_kwargs) - cy(i, h, *cy_args, **cy_kwargs)
 
-    return cy(r1, h, *cy_args, **cy_kwargs) - cy(r2, h + 0.1, *cy_args, **cy_kwargs)
+def ring(o=None, i=None, w=None, h=2, center=False):
+    if int(o != None) + int(i != None) + int(w != None) != 2:
+        raise ValueError("Specify at least 2 of `o`, `i`, and `w`")
+    if w == None:
+        w = o - i
+    elif i == None:
+        i = o - w
+    ring = solid.rotate_extrude()(solid.square([w, h]).x(i))
+    if center:
+        return ring.z(-h / 2)
+    return ring
 
-
-def q(x, y=None, z=None, center=True):
+def q(x, y=None, z=None, center=False):
     """A quick cube"""
-    if isinstance(x, (tuple, list)):
-        return solid.cube(x, center=center)
-    else:
-        if y is None:
-            y = x
-        if z is None:
-            z = x
-        return solid.cube([x, y, z], center=center)
-
+    if y is None:
+        y = x
+    if z is None:
+        z = x
+    return solid.cube([x, y, z], center=center)
 
 def _inner_rq(x, y, z, r, center, edges):
     xr = x / 2 - r
@@ -154,7 +149,7 @@ def _inner_rq(x, y, z, r, center, edges):
     return a
 
 
-def rq(x, y=None, z=None, r=1, center=True, axis="z", edges=(0, 1, 2, 3)):
+def rq(x, y=None, z=None, r=1, center=False, axis="z", edges=(0, 1, 2, 3)):
     """A rounded cube with four edges rounded by radius r.
     Use axis='x','y','z' and edges (0,1,2,3) to change
     which edges get rounded"""
@@ -177,7 +172,7 @@ def rq(x, y=None, z=None, r=1, center=True, axis="z", edges=(0, 1, 2, 3)):
         raise ValueError("axis must be x,y,z")
 
 
-def triangle90(a, b, height=1, axis="z", center=True):
+def triangle90(a, b, height=1, axis="z", center=False):
     """A quick 90 degree triangle with sidelengths a,b, extruded to height"""
     p = solid.polygon(
         [
@@ -191,11 +186,11 @@ def triangle90(a, b, height=1, axis="z", center=True):
     ).e(height)
     if center:
         c = ((0 + a + a) / 3, (0 + 0 + b) / 3)
-        if center is True or "z" in center:
+        if center or "z" in center:
             p = p.down(height / 2)
-        if center is True or "x" in center:
+        if center or "x" in center:
             p = p.left(c[0])
-        if center is True or "y" in center:
+        if center or "y" in center:
             p = p.back(c[1])
     if axis == "x":
         p = p.rotate(90, 0, 0)
