@@ -6,7 +6,7 @@ import math
 
 __version__ = "0.1.0"
 
-def ff_translate(self, x, y, z):
+def ff_translate(self, x, y, z=0):
     return solid.translate([x, y, z])(self)
 
 def ff_rotate(self, x, y=None, z=None, v=None):
@@ -41,12 +41,16 @@ def ff_linear_extrude(obj, height, axis="z", center=False, **kwargs):
         return o.rotate(0, 90, 0)
     return o
 
+def ff_offset(self, r=None, delta=None, chamfer=False, segments=60):
+    return solid.offset(r=r, delta=delta, chamfer=chamfer, segments=segments)(self)
+
 solid.OpenSCADObject.d = solid.OpenSCADObject.debug = lambda self: solid.debug(self)
 solid.OpenSCADObject.b = solid.OpenSCADObject.background = lambda self: solid.background(self)
 solid.OpenSCADObject.h = solid.OpenSCADObject.hole = lambda self: solid.hole()(self)
 solid.OpenSCADObject.t = solid.OpenSCADObject.translate = ff_translate
 solid.OpenSCADObject.r = solid.OpenSCADObject.rotate = ff_rotate
-solid.OpenSCADObject.s = solid.OpenSCADObject.scale = lambda x=1, y=1, z=1: solid.scale([x, y, z])
+solid.OpenSCADObject.s = solid.OpenSCADObject.scale = lambda self, x=1, y=1, z=1: solid.scale([x, y, z])(self)
+solid.OpenSCADObject.o = solid.OpenSCADObject.offset = ff_offset
 
 solid.OpenSCADObject.rzx = lambda self: solid.utils.rot_z_to_x(self)
 solid.OpenSCADObject.rzy = lambda self: solid.utils.rot_z_to_y(self)
@@ -68,6 +72,9 @@ solid.OpenSCADObject.e = solid.OpenSCADObject.extrude = solid.OpenSCADObject.lin
 
 solid.OpenSCADObject.dump = dump
 
+poly = solid.polygon
+hull = lambda *args: solid.hull()(*args)
+
 def c(r=None, d=None, segments=60):
     if r == None and d == None:
         raise ValueError("One of `r` and `d` must be specified")
@@ -75,14 +82,22 @@ def c(r=None, d=None, segments=60):
         return solid.circle(r=r, segments=segments)
     return solid.circle(d=d, segments=segments)
 
-def s(x, y=None):
+def s(x, y=None, center=None):
+    if center == None:
+        if type(y) in [int, float]:
+            return solid.square([x, y])
+        return solid.square(x, center=y)
     if y == None:
-        return solid.square(x)
-    return solid.square([x, y])
+        return solid.square(x, center)
+    return solid.square([x, y], center)
 
-def cy(r=None, h=None, center=False, r1=None, r2=None, axis="z", segments=60):
+def cy(d=None, h=2, center=False, d1=None, d2=None, r=None, r1=None, r2=None, axis="z", segments=60):
     _check_axis(axis)
-    cylinder = solid.cylinder(r, h, center=center, r1=r1, r2=r2, segments=segments)
+    if (r1 == None) == (r2 == None) and (d1 == None) == (d2 == None) and sum(int(a != None) for a in [r, r1, d, d1]) == 1:
+        pass
+    else:
+        raise ValueError("Specify one and only one of `r`, `d`, both `r1` and `r2`, and both `d1` and `d2`")
+    cylinder = solid.cylinder(r=r, r1=r1, r2=r2, d=d, d1=d1, d2=d2, h=h, center=center, segments=segments)
     if axis == "z":
         return cylinder
     elif axis == "y":
@@ -104,23 +119,48 @@ def arc(radius=20, angles=(45, 290), width=1):
         sector(radius, angles),
     )
 
-# def ring(o=None, i=None, w=None, h=2, *cy_args, **cy_kwargs):
-#     if int(o != None) + int(i != None) + int(w != None) != 2:
-#         raise ValueError("Specify at least 2 of `o`, `i`, and `w`")
+# def ring(o=None, i=None, w=None, od=None, id=None, h=2, hole=False, segments=60):
+#     if i != None and id != None:
+#         raise ValueError("Use only one of `i` and `id`")
+#     if o != None and od != None:
+#         raise ValueError("Use only one of `o` and `od`")
+#     if sum(int(a != None) for a in [o, i, w, od, id]) != 2:
+#         raise ValueError("Specify only 2 of `o`, `i`, `od`, `id`, and `w`")
+#     if o == None and od != None:
+#         o = od / 2
+#     if i == None and id != None:
+#         i = id / 2
 #     if o == None:
 #         o = i + w
 #     elif i == None:
 #         i = o - w
-#     return cy(o, h, *cy_args, **cy_kwargs) - cy(i, h, *cy_args, **cy_kwargs)
+#     if hole:
+#         return cy(r=o, h=h, segments=segments) + cy(r=o, h=h, segments=segments).h()
+#     return cy(o, h, segments=segments) - cy(i, h, segments=segments)
 
-def ring(o=None, i=None, w=None, h=2, center=False):
-    if int(o != None) + int(i != None) + int(w != None) != 2:
-        raise ValueError("Specify at least 2 of `o`, `i`, and `w`")
+def ring(od=None, id=None, h=2, center=False, w=None, o=None, i=None, hole=False, extra=True, segments=60):
+    if i != None and id != None:
+        raise ValueError("Use only one of `i` and `id`")
+    if o != None and od != None:
+        raise ValueError("Use only one of `o` and `od`")
+    if sum(int(a != None) for a in [o, i, w, od, id]) != 2:
+        raise ValueError("Specify only 2 of `o`, `i`, `od`, `id`, and `w`")
+    if o == None and od != None:
+        o = od / 2
+    if i == None and id != None:
+        i = id / 2
     if w == None:
         w = o - i
     elif i == None:
         i = o - w
-    ring = solid.rotate_extrude()(solid.square([w, h]).x(i))
+    if hole:
+        if extra:
+            inner = cy(r=i, h=h + 0.01, segments=segments).z(-0.005)
+        else:
+            inner = cy(r=i, h=h, segments=segments)
+        ring = cy(r=o, h=h, segments=segments) + inner.h()
+    else:
+        ring = solid.rotate_extrude(segments=segments)(solid.square([w, h]).x(i))
     if center:
         return ring.z(-h / 2)
     return ring
@@ -171,7 +211,6 @@ def rq(x, y=None, z=None, r=1, center=False, axis="z", edges=(0, 1, 2, 3)):
     else:
         raise ValueError("axis must be x,y,z")
 
-
 def triangle90(a, b, height=1, axis="z", center=False):
     """A quick 90 degree triangle with sidelengths a,b, extruded to height"""
     p = solid.polygon(
@@ -205,3 +244,5 @@ def triangle90(a, b, height=1, axis="z", center=False):
     else:
         raise ValueError("invalid axis")
     return p
+
+b = lambda d=None, r=None, seg=None: solid.sphere(d=d, r=r, segments=seg)
