@@ -25,6 +25,17 @@ def dump(root, fn, prefix=""):
         op.write(prefix.encode("utf-8"))
         op.write(solid.scad_render(root).encode("utf-8"))
 
+def dump_this(root, prefix=""):
+    import sys
+    file = sys.argv[0]
+    if file.endswith(".py"):
+        file = file[:-3]
+    if hasattr(root, "__call__"):
+        root = root()
+    with open(file, "wb") as op:
+        op.write(prefix.encode("utf-8"))
+        op.write(solid.scad_render(root).encode("utf-8"))
+
 def _check_axis(axis):
     if not axis in ("x", "y", "z"):
         raise ValueError("invalid axis")
