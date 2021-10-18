@@ -3,8 +3,12 @@ import solid
 from solid.utils import *
 import os
 import math
+from typing import Union
 
 __version__ = "0.1.0"
+
+def subseteq(x, y):
+    return (xset := set(x)) in y and list(xset) == list(x)
 
 def ff_translate(self, x, y, z=0):
     return solid.translate([x, y, z])(self)
@@ -18,7 +22,7 @@ def ff_rotate(self, x, y=None, z=None, v=None):
 
 def dump(root, fn, prefix=""):
     if fn.endswith(".py"):
-        fn = __file__.replace(".py", "")
+        fn = fn.replace(".py", "")
     if hasattr(root, "__call__"):
         root = root()
     with open(fn, "wb") as op:
@@ -29,7 +33,7 @@ def dump_this(root, prefix=""):
     import sys
     file = sys.argv[0]
     if file.endswith(".py"):
-        file = file[:-3]
+        file = file[:-2] + "scad"
     if hasattr(root, "__call__"):
         root = root()
     with open(file, "wb") as op:
@@ -62,6 +66,12 @@ solid.OpenSCADObject.t = solid.OpenSCADObject.translate = ff_translate
 solid.OpenSCADObject.r = solid.OpenSCADObject.rotate = ff_rotate
 solid.OpenSCADObject.s = solid.OpenSCADObject.scale = lambda self, x=1, y=1, z=1: solid.scale([x, y, z])(self)
 solid.OpenSCADObject.o = solid.OpenSCADObject.offset = ff_offset
+solid.OpenSCADObject.__pow__ = lambda x, y: hull(x, y)
+solid.OpenSCADObject.__xor__ = lambda x, y: x + y.h()
+
+solid.OpenSCADObject.rx = lambda self, x: solid.rotate((x, 0, 0))(self)
+solid.OpenSCADObject.ry = lambda self, y: solid.rotate((0, y, 0))(self)
+solid.OpenSCADObject.rz = lambda self, z: solid.rotate((0, 0, z))(self)
 
 solid.OpenSCADObject.rzx = lambda self: solid.utils.rot_z_to_x(self)
 solid.OpenSCADObject.rzy = lambda self: solid.utils.rot_z_to_y(self)
@@ -86,14 +96,10 @@ solid.OpenSCADObject.dump = dump
 poly = solid.polygon
 hull = lambda *args: solid.hull()(*args)
 
-def c(r=None, d=None, segments=60):
-    if r == None and d == None:
-        raise ValueError("One of `r` and `d` must be specified")
-    if r != None:
-        return solid.circle(r=r, segments=segments)
-    return solid.circle(d=d, segments=segments)
+def c(d=None, r=None, segments=60):
+    return solid.circle(d=d, r=r, segments=segments)
 
-def s(x, y=None, center=None):
+def s(x, y=None, center: str = None):
     if center == None:
         if type(y) in [int, float]:
             return solid.square([x, y])
@@ -102,19 +108,12 @@ def s(x, y=None, center=None):
         return solid.square(x, center)
     return solid.square([x, y], center)
 
-def cy(d=None, h=2, center=False, d1=None, d2=None, r=None, r1=None, r2=None, axis="z", segments=60):
+def cy(d=None, h=2, center=False, axis="z", segments=60, **kw):
     _check_axis(axis)
-    if (r1 == None) == (r2 == None) and (d1 == None) == (d2 == None) and sum(int(a != None) for a in [r, r1, d, d1]) == 1:
-        pass
-    else:
-        raise ValueError("Specify one and only one of `r`, `d`, both `r1` and `r2`, and both `d1` and `d2`")
-    cylinder = solid.cylinder(r=r, r1=r1, r2=r2, d=d, d1=d1, d2=d2, h=h, center=center, segments=segments)
-    if axis == "z":
-        return cylinder
-    elif axis == "y":
-        return cylinder.rotate(90, 0, 0)
-    elif axis == "x":
-        return cylinder.rotate(0, 90, 0)
+    cylinder = solid.cylinder(d=d, h=h, center=center, segments=segments, **kw)
+    if axis == "z":   return cylinder
+    elif axis == "y": return cylinder.rotate(90, 0, 0)
+    elif axis == "x": return cylinder.rotate(0, 90, 0)
 
 def sector(radius=20, angles=(45, 135)):
     rect = solid.square([radius * 2, radius]).left(radius)
@@ -129,25 +128,6 @@ def arc(radius=20, angles=(45, 290), width=1):
         sector(radius + width, angles),
         sector(radius, angles),
     )
-
-# def ring(o=None, i=None, w=None, od=None, id=None, h=2, hole=False, segments=60):
-#     if i != None and id != None:
-#         raise ValueError("Use only one of `i` and `id`")
-#     if o != None and od != None:
-#         raise ValueError("Use only one of `o` and `od`")
-#     if sum(int(a != None) for a in [o, i, w, od, id]) != 2:
-#         raise ValueError("Specify only 2 of `o`, `i`, `od`, `id`, and `w`")
-#     if o == None and od != None:
-#         o = od / 2
-#     if i == None and id != None:
-#         i = id / 2
-#     if o == None:
-#         o = i + w
-#     elif i == None:
-#         i = o - w
-#     if hole:
-#         return cy(r=o, h=h, segments=segments) + cy(r=o, h=h, segments=segments).h()
-#     return cy(o, h, segments=segments) - cy(i, h, segments=segments)
 
 def ring(od=None, id=None, h=2, center=False, w=None, o=None, i=None, hole=False, extra=True, segments=60):
     if i != None and id != None:
@@ -226,10 +206,7 @@ def triangle90(a, b, height=1, axis="z", center=False):
     """A quick 90 degree triangle with sidelengths a,b, extruded to height"""
     p = solid.polygon(
         [
-            [
-                0,
-                0,
-            ],
+            [0, 0],
             [a, 0],
             [a, b],
         ]
@@ -256,4 +233,4 @@ def triangle90(a, b, height=1, axis="z", center=False):
         raise ValueError("invalid axis")
     return p
 
-b = lambda d=None, r=None, seg=None: solid.sphere(d=d, r=r, segments=seg)
+b = lambda d=None, r=None, segments=None: solid.sphere(d=d, r=r, segments=segments)
