@@ -3,7 +3,7 @@ import solid
 from solid.utils import *
 import os
 import math
-from typing import Union
+from typing import Union, List, Tuple, Any
 
 __version__ = "0.1.0"
 
@@ -59,39 +59,47 @@ def ff_linear_extrude(obj, height, axis="z", center=False, **kwargs):
 def ff_offset(self, r=None, delta=None, chamfer=False, segments=60):
     return solid.offset(r=r, delta=delta, chamfer=chamfer, segments=segments)(self)
 
-solid.OpenSCADObject.d = solid.OpenSCADObject.debug = lambda self: solid.debug(self)
-solid.OpenSCADObject.b = solid.OpenSCADObject.background = lambda self: solid.background(self)
-solid.OpenSCADObject.h = solid.OpenSCADObject.hole = lambda self: solid.hole()(self)
-solid.OpenSCADObject.t = solid.OpenSCADObject.translate = ff_translate
-solid.OpenSCADObject.r = solid.OpenSCADObject.rotate = ff_rotate
-solid.OpenSCADObject.s = solid.OpenSCADObject.scale = lambda self, x=1, y=1, z=1: solid.scale([x, y, z])(self)
-solid.OpenSCADObject.o = solid.OpenSCADObject.offset = ff_offset
-solid.OpenSCADObject.__pow__ = lambda x, y: hull(x, y)
-solid.OpenSCADObject.__xor__ = lambda x, y: x + y.h()
+def patches(l: List[Tuple[List[str], Any]]):
+    for names, val in l:
+        for s in names:
+            setattr(solid.OpenSCADObject, s, val)
 
-solid.OpenSCADObject.rx = lambda self, x: solid.rotate((x, 0, 0))(self)
-solid.OpenSCADObject.ry = lambda self, y: solid.rotate((0, y, 0))(self)
-solid.OpenSCADObject.rz = lambda self, z: solid.rotate((0, 0, z))(self)
+patches([
+    (["d", "debug"], lambda self: solid.debug(self)),
+    (["b", "background"], lambda self: solid.background(self)),
+    (["h", "hole"], lambda self: solid.hole()(self)),
+    (["t", "translate"], ff_translate),
+    (["r", "rotate"], ff_rotate),
+    (["s", "scale"], lambda self, x=1, y=1, z=1: solid.scale([x, y, z])(self)),
+    (["o", "offset"], ff_offset),
+    (["__pow__"], lambda x, y: hull(x, y)),
+    (["__xor__"], lambda x, y: x + y.h()),
 
-solid.OpenSCADObject.rzx = lambda self: solid.utils.rot_z_to_x(self)
-solid.OpenSCADObject.rzy = lambda self: solid.utils.rot_z_to_y(self)
-solid.OpenSCADObject.rxy = lambda self: solid.utils.rot_x_to_y(self)
-solid.OpenSCADObject.rxz = lambda self: solid.utils.rot_z_to_x(self)
-solid.OpenSCADObject.ryx = lambda self: solid.utils.rot_x_to_y(self)
-solid.OpenSCADObject.ryz = lambda self: solid.utils.rot_z_to_y(self)
+    (["rx"], lambda self, x: solid.rotate((x, 0, 0))(self)),
+    (["ry"], lambda self, y: solid.rotate((0, y, 0))(self)),
+    (["rz"], lambda self, z: solid.rotate((0, 0, z))(self)),
 
-solid.OpenSCADObject.x = solid.OpenSCADObject.right = lambda self, d: solid.utils.right(d)(self)
-solid.OpenSCADObject.left = lambda self, d: solid.utils.left(d)(self)  # along y
-solid.OpenSCADObject.y = solid.OpenSCADObject.forward = lambda self, d: solid.utils.forward(d)(self)  # along x
-solid.OpenSCADObject.back = lambda self, d: solid.utils.back(d)(self)
-solid.OpenSCADObject.z = solid.OpenSCADObject.up = lambda self, d: solid.utils.up(d)(self)  # along z
-solid.OpenSCADObject.down = lambda self, d: solid.utils.down(d)(self)
-solid.OpenSCADObject.c = solid.OpenSCADObject.color = lambda self, c: solid.color(c)(self)
-solid.OpenSCADObject.m = solid.OpenSCADObject.mirror = lambda self, a, b, c: solid.mirror([a, b, c])(self)
+    (["rzx"], lambda self: solid.utils.rot_z_to_x(self)),
+    (["rzy"], lambda self: solid.utils.rot_z_to_y(self)),
+    (["rxy"], lambda self: solid.utils.rot_x_to_y(self)),
+    (["rxz"], lambda self: solid.utils.rot_z_to_neg_x(self)),
+    (["ryx"], lambda self: solid.utils.rot_x_to_neg_y(self)),
+    (["ryz"], lambda self: solid.utils.rot_z_to_neg_y(self)),
 
-solid.OpenSCADObject.e = solid.OpenSCADObject.extrude = solid.OpenSCADObject.linear_extrude = ff_linear_extrude
+    (["x", "right"], lambda self, d: solid.utils.right(d)(self)),
+    (["left"], lambda self, d: solid.utils.left(d)(self)),  # along y
+    (["y", "forward"], lambda self, d: solid.utils.forward(d)(self)),  # along x
+    (["back"], lambda self, d: solid.utils.back(d)(self)),
+    (["z", "up"], lambda self, d: solid.utils.up(d)(self)),  # along z
+    (["down"], lambda self, d: solid.utils.down(d)(self)),
+    (["c", "color"], lambda self, c: solid.color(c)(self)),
+    (["m", "mirror"], lambda self, a, b, c: solid.mirror([a, b, c])(self)),
 
-solid.OpenSCADObject.dump = dump
+    (["e", "extrude", "linear_extrude"], ff_linear_extrude),
+
+    (["dump"], dump),
+    (["dump_this"], dump_this),
+])
 
 poly = solid.polygon
 hull = lambda *args: solid.hull()(*args)
@@ -112,8 +120,8 @@ def cy(d=None, h=2, center=False, axis="z", segments=60, **kw):
     _check_axis(axis)
     cylinder = solid.cylinder(d=d, h=h, center=center, segments=segments, **kw)
     if axis == "z":   return cylinder
-    elif axis == "y": return cylinder.rotate(90, 0, 0)
-    elif axis == "x": return cylinder.rotate(0, 90, 0)
+    elif axis == "y": return cylinder.rzy()
+    elif axis == "x": return cylinder.rzx()
 
 def sector(radius=20, angles=(45, 135)):
     rect = solid.square([radius * 2, radius]).left(radius)
