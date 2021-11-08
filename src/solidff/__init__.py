@@ -96,6 +96,7 @@ patches([
     (["m", "mirror"], lambda self, a, b, c: solid.mirror([a, b, c])(self)),
 
     (["e", "extrude", "linear_extrude"], ff_linear_extrude),
+    (["render"], lambda self, **kw: solid.render(**kw)(self)),
 
     (["dump"], dump),
     (["dump_this"], dump_this),
