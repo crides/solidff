@@ -3,7 +3,7 @@ import solid
 from solid.utils import *
 import os
 import math
-from typing import Union, List, Tuple, Any
+from typing import Union, List, Tuple, Callable
 
 __version__ = "0.1.0"
 
@@ -59,7 +59,7 @@ def ff_linear_extrude(obj, height, axis="z", center=False, **kwargs):
 def ff_offset(self, r=None, delta=None, chamfer=False, segments=60):
     return solid.offset(r=r, delta=delta, chamfer=chamfer, segments=segments)(self)
 
-def patches(l: List[Tuple[List[str], Any]]):
+def patches(l: List[Tuple[List[str], Callable]]):
     for names, val in l:
         for s in names:
             setattr(solid.OpenSCADObject, s, val)
@@ -79,12 +79,12 @@ patches([
     (["ry"], lambda self, y: solid.rotate((0, y, 0))(self)),
     (["rz"], lambda self, z: solid.rotate((0, 0, z))(self)),
 
-    (["rzx"], lambda self: solid.utils.rot_z_to_x(self)),
-    (["rzy"], lambda self: solid.utils.rot_z_to_y(self)),
-    (["rxy"], lambda self: solid.utils.rot_x_to_y(self)),
-    (["rxz"], lambda self: solid.utils.rot_z_to_neg_x(self)),
-    (["ryx"], lambda self: solid.utils.rot_x_to_neg_y(self)),
-    (["ryz"], lambda self: solid.utils.rot_z_to_neg_y(self)),
+    (["rzx"], solid.utils.rot_z_to_x),
+    (["rzy"], solid.utils.rot_z_to_y),
+    (["rxy"], solid.utils.rot_x_to_y),
+    (["rxz"], solid.utils.rot_z_to_neg_x),
+    (["ryx"], solid.utils.rot_x_to_neg_y),
+    (["ryz"], solid.utils.rot_z_to_neg_y),
 
     (["x", "right"], lambda self, d: solid.utils.right(d)(self)),
     (["left"], lambda self, d: solid.utils.left(d)(self)),  # along y
@@ -105,17 +105,35 @@ patches([
 poly = solid.polygon
 hull = lambda *args: solid.hull()(*args)
 
+def center_obj(obj, center: Union[bool, str, None] = None, x=None, y=None, z=None):
+    if type(center) == bool:
+        return obj(center)
+    obj = obj(None)
+    if center == None:
+        return obj
+    center = set(center)
+    if 'x' in center:
+        obj = obj.x(-x/2)
+    if 'y' in center:
+        obj = obj.y(-y/2)
+    if 'z' in center:
+        obj = obj.z(-z/2)
+    return obj
+
 def c(d=None, r=None, segments=60):
     return solid.circle(d=d, r=r, segments=segments)
 
-def s(x, y=None, center: str = None):
+def s(x, y=None, center: Union[bool, str, None] = None):
     if center == None:
         if type(y) in [int, float]:
             return solid.square([x, y])
-        return solid.square(x, center=y)
+        obj = lambda c:solid.square(x, center=c)
+        return center_obj(obj, y, x, x)
     if y == None:
-        return solid.square(x, center)
-    return solid.square([x, y], center)
+        obj = lambda c:solid.square(x, center=c)
+        return center_obj(obj, center, x, x)
+    obj = lambda c:solid.square([x, y], center=c)
+    return center_obj(obj, center, x, y)
 
 def cy(d=None, h=2, center=False, axis="z", segments=60, **kw):
     _check_axis(axis)
@@ -153,6 +171,8 @@ def ring(od=None, id=None, h=2, center=False, w=None, o=None, i=None, hole=False
         w = o - i
     elif i == None:
         i = o - w
+    elif o == None:
+        o = i + w
     if hole:
         if extra:
             inner = cy(r=i, h=h + 0.01, segments=segments).z(-0.005)
@@ -165,13 +185,14 @@ def ring(od=None, id=None, h=2, center=False, w=None, o=None, i=None, hole=False
         return ring.z(-h / 2)
     return ring
 
-def q(x, y=None, z=None, center=False):
+def q(x, y=None, z=None, center: Union[bool, str, None] = None):
     """A quick cube"""
     if y is None:
         y = x
     if z is None:
         z = x
-    return solid.cube([x, y, z], center=center)
+    obj = lambda c:solid.cube([x, y, z], center=c)
+    return center_obj(obj, center, x, y, z)
 
 def _inner_rq(x, y, z, r, center, edges):
     xr = x / 2 - r
@@ -242,4 +263,4 @@ def triangle90(a, b, height=1, axis="z", center=False):
         raise ValueError("invalid axis")
     return p
 
-b = lambda d=None, r=None, segments=None: solid.sphere(d=d, r=r, segments=segments)
+b = lambda d=None, r=None, segments=60: solid.sphere(d=d, r=r, segments=segments)
